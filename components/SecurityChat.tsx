@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { chatWithVoxyStream, VoxyApiError } from '../services/geminiService';
-import { Send, User, Loader2, Plus, BrainCircuit, Paperclip, Image as ImageIcon, X, FileText, Sparkles, ExternalLink } from 'lucide-react';
+import { Send, User, Loader2, Plus, BrainCircuit, Paperclip, Image as ImageIcon, X, FileText, Sparkles, ExternalLink, ZapOff, AlertTriangle } from 'lucide-react';
 import { ChatMessage } from '../types';
 import CodeBlock from './CodeBlock';
 
@@ -34,7 +34,7 @@ const SecurityChat: React.FC<SecurityChatProps> = ({
   const [loading, setLoading] = useState(false);
   const [isTypingAnimation, setIsTypingAnimation] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
-  const [errorStatus, setErrorStatus] = useState<{msg: string, reason: string} | null>(null);
+  const [errorStatus, setErrorStatus] = useState<{msg: string, reason: string, isQuota: boolean} | null>(null);
   const [groundingSources, setGroundingSources] = useState<any[]>([]);
   
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -120,7 +120,8 @@ const SecurityChat: React.FC<SecurityChatProps> = ({
     if (!onUseQuota()) {
       setErrorStatus({ 
         msg: "Energi Sistem Terbatas", 
-        reason: "Quota harian lokal sedang memulihkan diri."
+        reason: "Quota harian lokal sedang memulihkan diri.",
+        isQuota: true
       });
       return;
     }
@@ -158,7 +159,6 @@ const SecurityChat: React.FC<SecurityChatProps> = ({
         if (stopTypingRef.current) break;
         fullContent += chunk.text || '';
         
-        // Fix: Extract grounding chunks for compliance with Google Search tool rules
         const metadata = chunk.candidates?.[0]?.groundingMetadata;
         if (metadata?.groundingChunks) {
           sources = [...sources, ...metadata.groundingChunks];
@@ -179,7 +179,11 @@ const SecurityChat: React.FC<SecurityChatProps> = ({
       setIsTypingAnimation(false);
       
       const voxyError = err as VoxyApiError;
-      setErrorStatus({ msg: voxyError.message || "Link Failure", reason: voxyError.reason || "Gangguan transmisi neural." });
+      setErrorStatus({ 
+        msg: voxyError.message || "Link Failure", 
+        reason: voxyError.reason || "Gangguan transmisi neural.",
+        isQuota: voxyError.isQuotaError
+      });
       
       setMessages(prev => {
         const updated = [...prev];
@@ -194,6 +198,7 @@ const SecurityChat: React.FC<SecurityChatProps> = ({
 
   return (
     <div className="flex flex-col h-[calc(100vh-10rem)] w-full max-w-5xl mx-auto relative glass-card rounded-[3rem] overflow-hidden shadow-2xl border border-white/50 animate-smooth dark:bg-navy-900/40">
+      {/* Header Area */}
       <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100 dark:border-slate-800 bg-white/60 dark:bg-navy-900/60 backdrop-blur-xl z-10">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 bg-slate-900 dark:bg-sky-500 rounded-2xl flex items-center justify-center text-white shadow-xl">
@@ -216,6 +221,23 @@ const SecurityChat: React.FC<SecurityChatProps> = ({
         </div>
       </div>
 
+      {/* Quota Exhausted Warning Banner */}
+      {errorStatus?.isQuota && (
+        <div className="mx-8 mt-4 p-4 bg-red-500 text-white rounded-2xl flex items-center justify-between animate-in slide-in-from-top-4 shadow-lg shadow-red-500/20 z-20">
+          <div className="flex items-center gap-3">
+             <ZapOff size={20} className="animate-pulse" />
+             <div>
+                <p className="text-[10px] font-black uppercase tracking-widest">Neural Quota Exhausted</p>
+                <p className="text-[8px] font-bold opacity-80 uppercase mt-0.5">Batas penggunaan API di Google AI Studio telah tercapai.</p>
+             </div>
+          </div>
+          <a href="https://aistudio.google.com/app/billing" target="_blank" className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all">
+             Check Billing
+          </a>
+        </div>
+      )}
+
+      {/* Chat Messages Area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 md:p-12 space-y-10 custom-scrollbar bg-slate-50/20 dark:bg-transparent">
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-8 animate-smooth">
@@ -283,7 +305,6 @@ const SecurityChat: React.FC<SecurityChatProps> = ({
                 </div>
               </div>
               
-              {/* Fix: Display Google Search grounding sources for transparency as per guidelines */}
               {msg.role === 'model' && i === messages.length - 1 && groundingSources.length > 0 && (
                 <div className="ml-20 flex flex-wrap gap-2 animate-in fade-in slide-in-from-bottom-2">
                   {groundingSources.map((source, idx) => (
@@ -307,6 +328,7 @@ const SecurityChat: React.FC<SecurityChatProps> = ({
         )}
       </div>
 
+      {/* Input Area */}
       <div className="p-8 bg-white dark:bg-navy-900 border-t border-slate-100 dark:border-slate-800 relative">
         {attachedFiles.length > 0 && (
           <div className="flex flex-wrap gap-3 mb-4 animate-smooth">
@@ -343,8 +365,8 @@ const SecurityChat: React.FC<SecurityChatProps> = ({
             rows={1}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            disabled={quota <= 0 || loading || isThinking}
-            placeholder="Ketik instruksi keamanan Kak..."
+            disabled={quota <= 0 || loading || isThinking || errorStatus?.isQuota}
+            placeholder={errorStatus?.isQuota ? "Neural Link Offline..." : "Ketik instruksi keamanan Kak..."}
             className="w-full bg-transparent px-4 py-3 text-sm font-bold outline-none text-slate-800 dark:text-white placeholder:text-slate-300 resize-none max-h-[250px] custom-scrollbar"
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
           />
@@ -374,7 +396,7 @@ const SecurityChat: React.FC<SecurityChatProps> = ({
               </div>
               <button
                 onClick={handleSend}
-                disabled={(!input.trim() && attachedFiles.length === 0) || loading || quota <= 0 || isThinking}
+                disabled={(!input.trim() && attachedFiles.length === 0) || loading || quota <= 0 || isThinking || errorStatus?.isQuota}
                 className={`w-12 h-12 rounded-full flex items-center justify-center shadow-xl ${loading || isThinking ? 'bg-slate-200 text-slate-400' : 'bg-slate-900 dark:bg-sky-500 text-white hover:scale-110 active:scale-90 transition-all'}`}
               >
                 {loading || isThinking ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}

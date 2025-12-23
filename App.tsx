@@ -14,16 +14,11 @@ import VoxyBubble from './components/VoxyBubble';
 import { ToolType, ChatHistoryItem, ChatMessage, UserSession, UserRole } from './types';
 import { Power, Menu, Moon, Sun, Search, Activity, Key, RefreshCcw, ShieldCheck } from 'lucide-react';
 
-// Define the AIStudio interface to ensure compatibility with global environment declarations
-interface AIStudio {
-  hasSelectedApiKey: () => Promise<boolean>;
-  openSelectKey: () => Promise<void>;
-}
-
+// Fix: Removed local AIStudio interface definition as it conflicts with the global definition 
+// and removed readonly modifier to match the existing global declaration on Window.
 declare global {
   interface Window {
-    // Fix: Match the expected property type 'AIStudio' and ensure identical modifiers (readonly)
-    readonly aistudio: AIStudio;
+    aistudio: AIStudio;
   }
 }
 
@@ -49,7 +44,8 @@ const App: React.FC = () => {
     const checkKeyStatus = async () => {
       if (window.aistudio) {
         const hasKey = await window.aistudio.hasSelectedApiKey();
-        setKeyStatus(hasKey || !!process.env.API_KEY ? 'valid' : 'missing');
+        // Persist local check to ensure it stays valid in this session
+        setKeyStatus(hasKey ? 'valid' : 'missing');
       }
     };
     checkKeyStatus();
@@ -91,6 +87,10 @@ const App: React.FC = () => {
     const newSession: UserSession = { isAuthenticated: true, username, email, loginTime: Date.now(), role };
     setSession(newSession);
     localStorage.setItem('voxy_session', JSON.stringify(newSession));
+    // Re-verify key on login
+    if (window.aistudio) {
+      window.aistudio.hasSelectedApiKey().then(has => setKeyStatus(has ? 'valid' : 'missing'));
+    }
   };
 
   const handleLogout = () => {
