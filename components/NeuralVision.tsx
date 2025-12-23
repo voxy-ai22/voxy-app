@@ -39,7 +39,12 @@ const NeuralVision: React.FC<NeuralVisionProps> = ({ onUseQuota, quota, onKeyErr
     setLoading(true);
     setError(null);
     try {
-      const stream = await chatWithVoxyStream("Analyze this image for architectural flaws, security risks, or code logic errors.", [], imageBase64);
+      // Fix: chatWithVoxyStream expects attachments array as 3rd argument
+      const stream = await chatWithVoxyStream(
+        "Analyze this image for architectural flaws, security risks, or code logic errors.", 
+        [], 
+        [{ data: imageBase64, mimeType: 'image/jpeg' }]
+      );
       let fullText = "";
       for await (const chunk of stream) {
         fullText += chunk.text || "";

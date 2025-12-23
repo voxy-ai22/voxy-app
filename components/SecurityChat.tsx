@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { chatWithVoxyStream, VoxyApiError } from '../services/geminiService';
-import { Send, User, Loader2, Plus, BrainCircuit, Paperclip, Image as ImageIcon, X, FileText, Sparkles } from 'lucide-react';
+import { Send, User, Loader2, Plus, BrainCircuit, Paperclip, Image as ImageIcon, X, FileText, Sparkles, ExternalLink } from 'lucide-react';
 import { ChatMessage } from '../types';
 import CodeBlock from './CodeBlock';
 
@@ -35,6 +35,7 @@ const SecurityChat: React.FC<SecurityChatProps> = ({
   const [isTypingAnimation, setIsTypingAnimation] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [errorStatus, setErrorStatus] = useState<{msg: string, reason: string} | null>(null);
+  const [groundingSources, setGroundingSources] = useState<any[]>([]);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const stopTypingRef = useRef<boolean>(false);
@@ -125,6 +126,7 @@ const SecurityChat: React.FC<SecurityChatProps> = ({
     }
 
     setErrorStatus(null);
+    setGroundingSources([]);
     const attachmentsToPayload = attachedFiles.map(f => ({ data: f.data, mimeType: f.type }));
     const userMsgImage = attachedFiles.find(f => f.type.startsWith('image/'))?.data;
 
@@ -147,6 +149,7 @@ const SecurityChat: React.FC<SecurityChatProps> = ({
     try {
       const stream = await chatWithVoxyStream(originalInput || "Analisis lampiran ini", messages, attachmentsToPayload);
       let fullContent = '';
+      let sources: any[] = [];
       
       setMessages(prev => [...prev, { role: 'model', text: '', timestamp: Date.now() }]);
       const modelMsgIndex = currentMessages.length;
@@ -154,10 +157,17 @@ const SecurityChat: React.FC<SecurityChatProps> = ({
       for await (const chunk of stream) {
         if (stopTypingRef.current) break;
         fullContent += chunk.text || '';
+        
+        // Fix: Extract grounding chunks for compliance with Google Search tool rules
+        const metadata = chunk.candidates?.[0]?.groundingMetadata;
+        if (metadata?.groundingChunks) {
+          sources = [...sources, ...metadata.groundingChunks];
+        }
       }
 
       setLoading(false);
       setIsThinking(false);
+      setGroundingSources(sources);
 
       if (!stopTypingRef.current) {
         await typeText(fullContent, modelMsgIndex);
@@ -239,37 +249,59 @@ const SecurityChat: React.FC<SecurityChatProps> = ({
           </div>
         ) : (
           messages.map((msg, i) => (
-            <div key={i} className={`flex gap-6 ${msg.role === 'user' ? 'flex-row-reverse' : ''} animate-smooth`}>
-              <div className={`w-12 h-12 rounded-2xl shrink-0 flex items-center justify-center shadow-lg ${
-                msg.role === 'user' ? 'bg-slate-900 text-white' : 'bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-800 text-sky-500'
-              }`}>
-                {msg.role === 'user' ? <User size={20} /> : <span className="font-mono font-black text-xl">V</span>}
-              </div>
+            <div key={i} className={`flex flex-col gap-4`}>
+              <div className={`flex gap-6 ${msg.role === 'user' ? 'flex-row-reverse' : ''} animate-smooth`}>
+                <div className={`w-12 h-12 rounded-2xl shrink-0 flex items-center justify-center shadow-lg ${
+                  msg.role === 'user' ? 'bg-slate-900 text-white' : 'bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-800 text-sky-500'
+                }`}>
+                  {msg.role === 'user' ? <User size={20} /> : <span className="font-mono font-black text-xl">V</span>}
+                </div>
 
-              <div className={`max-w-[85%] rounded-[2.5rem] px-8 py-6 text-sm leading-relaxed relative transition-all shadow-sm ${
-                msg.role === 'user' 
-                  ? 'bg-sky-500 text-white rounded-tr-none' 
-                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-100 dark:border-slate-700 rounded-tl-none'
-              }`}>
-                {msg.image && (
-                  <div className="mb-4 rounded-2xl overflow-hidden border border-white/20 shadow-md">
-                     <img src={msg.image} alt="User Attachment" className="max-h-60 w-full object-cover" />
+                <div className={`max-w-[85%] rounded-[2.5rem] px-8 py-6 text-sm leading-relaxed relative transition-all shadow-sm ${
+                  msg.role === 'user' 
+                    ? 'bg-sky-500 text-white rounded-tr-none' 
+                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-100 dark:border-slate-700 rounded-tl-none'
+                }`}>
+                  {msg.image && (
+                    <div className="mb-4 rounded-2xl overflow-hidden border border-white/20 shadow-md">
+                       <img src={msg.image} alt="User Attachment" className="max-h-60 w-full object-cover" />
+                    </div>
+                  )}
+                  <div className="prose prose-sm dark:prose-invert max-w-none break-words">
+                     {msg.text === '' && msg.role === 'model' && (isThinking || loading) ? (
+                        <div className="flex flex-col gap-3 py-2">
+                           <div className="flex items-center gap-3 text-sky-500 font-black text-[10px] uppercase tracking-widest animate-pulse">
+                              <BrainCircuit size={14} className="animate-spin-slow" /> Voxy is scanning...
+                           </div>
+                        </div>
+                     ) : (
+                       msg.text.split('```').map((part, index) => (
+                         index % 2 === 1 ? <CodeBlock key={index} code={part.trim()} /> : <p key={index} className="whitespace-pre-wrap">{part}</p>
+                       ))
+                     )}
                   </div>
-                )}
-                <div className="prose prose-sm dark:prose-invert max-w-none break-words">
-                   {msg.text === '' && msg.role === 'model' && (isThinking || loading) ? (
-                      <div className="flex flex-col gap-3 py-2">
-                         <div className="flex items-center gap-3 text-sky-500 font-black text-[10px] uppercase tracking-widest animate-pulse">
-                            <BrainCircuit size={14} className="animate-spin-slow" /> Voxy is scanning...
-                         </div>
-                      </div>
-                   ) : (
-                     msg.text.split('```').map((part, index) => (
-                       index % 2 === 1 ? <CodeBlock key={index} code={part.trim()} /> : <p key={index} className="whitespace-pre-wrap">{part}</p>
-                     ))
-                   )}
                 </div>
               </div>
+              
+              {/* Fix: Display Google Search grounding sources for transparency as per guidelines */}
+              {msg.role === 'model' && i === messages.length - 1 && groundingSources.length > 0 && (
+                <div className="ml-20 flex flex-wrap gap-2 animate-in fade-in slide-in-from-bottom-2">
+                  {groundingSources.map((source, idx) => (
+                    source.web && (
+                      <a 
+                        key={idx} 
+                        href={source.web.uri} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-sky-50 dark:hover:bg-sky-500/10 rounded-full text-[10px] font-bold text-slate-500 hover:text-sky-500 transition-all border border-slate-200 dark:border-slate-700"
+                      >
+                        <ExternalLink size={10} />
+                        {source.web.title || 'Source'}
+                      </a>
+                    )
+                  ))}
+                </div>
+              )}
             </div>
           ))
         )}

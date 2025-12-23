@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { ChatMessage } from "../types";
 
@@ -24,7 +25,8 @@ Identity: Always refer to yourself as Voxy Ai.
 Creator: Gobel Developer.
 Language: Indonesian for interaction, English for technical terms.`;
 
-const CORE_MODEL = 'gemini-3-flash-preview';
+// Fix: Use gemini-3-pro-preview for complex coding and logic tasks as per guidelines
+const CORE_MODEL = 'gemini-3-pro-preview';
 
 const handleNeuralError = (error: any): never => {
   const statusStr = error.message?.match(/(\d{3})/)?.[1];
@@ -35,22 +37,27 @@ const handleNeuralError = (error: any): never => {
   let isQuotaError = false;
   let isAuthError = false;
 
+  // Deteksi error kuota
   if (status === 429 || 
       rawMessage.toLowerCase().includes('quota') || 
       rawMessage.toLowerCase().includes('exhausted') || 
       rawMessage.toLowerCase().includes('rate limit')) {
     reason = "Batas Quota Gemini API Habis. Silakan tunggu sebentar.";
     isQuotaError = true;
-  } else if (status === 403 || status === 401 || 
+  } 
+  // Deteksi error autentikasi atau "Requested entity was not found" sesuai instruksi
+  else if (status === 403 || status === 401 || 
              rawMessage.toLowerCase().includes('key') || 
-             rawMessage.toLowerCase().includes('permission')) {
-    reason = "API Key tidak valid atau tidak memiliki izin akses.";
+             rawMessage.toLowerCase().includes('permission') ||
+             rawMessage.toLowerCase().includes('requested entity was not found')) {
+    reason = "Koneksi Neural Terputus. API Key tidak valid atau perlu disinkronisasi ulang.";
     isAuthError = true;
   }
 
   throw { status, message: rawMessage, reason, isQuotaError, isAuthError, timestamp: Date.now() } as VoxyApiError;
 };
 
+// Selalu buat instance baru tepat sebelum request untuk memastikan kunci terbaru digunakan
 const getAIInstance = () => {
   const key = process.env.API_KEY || '';
   return new GoogleGenAI({ apiKey: key });
@@ -66,7 +73,6 @@ export const chatWithVoxyStream = async (message: string, history: ChatMessage[]
 
     const userParts: any[] = [{ text: message }];
     
-    // Tambahkan semua lampiran (gambar/file) ke parts
     attachments.forEach(att => {
       userParts.push({
         inlineData: {

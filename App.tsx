@@ -12,7 +12,20 @@ import Auth from './components/Auth';
 import CommandPalette from './components/CommandPalette';
 import VoxyBubble from './components/VoxyBubble';
 import { ToolType, ChatHistoryItem, ChatMessage, UserSession, UserRole } from './types';
-import { Power, Menu, ShieldCheck, Zap, Key, Moon, Sun, Search, Activity } from 'lucide-react';
+import { Power, Menu, Moon, Sun, Search, Activity, Key, RefreshCcw, ShieldCheck } from 'lucide-react';
+
+// Define the AIStudio interface to ensure compatibility with global environment declarations
+interface AIStudio {
+  hasSelectedApiKey: () => Promise<boolean>;
+  openSelectKey: () => Promise<void>;
+}
+
+declare global {
+  interface Window {
+    // Fix: Match the expected property type 'AIStudio' and ensure identical modifiers (readonly)
+    readonly aistudio: AIStudio;
+  }
+}
 
 const MAX_QUOTA = 15; 
 
@@ -25,12 +38,21 @@ const App: React.FC = () => {
   const [isDarkMode, setIsDarkMode] = useState(document.documentElement.classList.contains('dark'));
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [quota, setQuota] = useState(MAX_QUOTA);
+  const [keyStatus, setKeyStatus] = useState<'valid' | 'missing'>('valid');
 
   useEffect(() => {
     const savedSession = localStorage.getItem('voxy_session');
     if (savedSession) setSession(JSON.parse(savedSession));
     const savedHistory = localStorage.getItem('voxy_history');
     if (savedHistory) setHistory(JSON.parse(savedHistory));
+
+    const checkKeyStatus = async () => {
+      if (window.aistudio) {
+        const hasKey = await window.aistudio.hasSelectedApiKey();
+        setKeyStatus(hasKey || !!process.env.API_KEY ? 'valid' : 'missing');
+      }
+    };
+    checkKeyStatus();
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
@@ -44,6 +66,14 @@ const App: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
+
+  const handleKeySync = async () => {
+    if (window.aistudio) {
+      await window.aistudio.openSelectKey();
+      // Asumsikan sukses sesuai instruksi race condition
+      setKeyStatus('valid');
+    }
+  };
 
   const toggleDarkMode = () => {
     const newMode = !isDarkMode;
@@ -101,6 +131,7 @@ const App: React.FC = () => {
         onSelectHistory={(id) => { setActiveSessionId(id); setActiveTool(ToolType.INTELLIGENCE_CHAT); }}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
+        onSyncKey={handleKeySync}
       />
       
       <main className="flex-1 flex flex-col min-w-0 relative">
@@ -111,13 +142,26 @@ const App: React.FC = () => {
              </button>
              
              <div className="flex items-center gap-3">
-               <div className="flex items-center gap-3 px-6 py-2.5 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 text-slate-500">
-                  <Activity size={18} className="text-emerald-500 animate-pulse" />
+               <div className="flex items-center gap-3 px-4 md:px-6 py-2.5 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
+                  <Activity size={18} className={keyStatus === 'valid' ? 'text-emerald-500 animate-pulse' : 'text-red-500 animate-ping'} />
                   <div className="flex flex-col items-start leading-none">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-900 dark:text-white">Neural Active</span>
-                    <span className="text-[7px] font-bold opacity-60 uppercase mt-0.5">Secure Env Linked</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-900 dark:text-white">
+                      {keyStatus === 'valid' ? 'Neural Active' : 'Neural Link Failure'}
+                    </span>
+                    <span className="text-[7px] font-bold opacity-60 uppercase mt-0.5">
+                      {keyStatus === 'valid' ? 'Secure Env Linked' : 'Sync Required'}
+                    </span>
                   </div>
                </div>
+               
+               {keyStatus === 'missing' && (
+                 <button 
+                  onClick={handleKeySync}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-red-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest animate-pulse shadow-lg shadow-red-500/20"
+                 >
+                   <RefreshCcw size={14} /> Sync Key
+                 </button>
+               )}
              </div>
           </div>
 
@@ -138,8 +182,8 @@ const App: React.FC = () => {
           <div className="max-w-6xl mx-auto h-full">
             <div key={activeTool} className="animate-smooth h-full">
                 {activeTool === ToolType.DASHBOARD && <Dashboard />}
-                {activeTool === ToolType.WEB_MASTER && <WebMasterTool onUseQuota={useQuota} quota={quota} />}
-                {activeTool === ToolType.LOGIC_FIXER && <ScriptGenTool onUseQuota={useQuota} quota={quota} />}
+                {activeTool === ToolType.WEB_MASTER && <WebMasterTool onUseQuota={useQuota} quota={quota} onKeyError={handleKeySync} />}
+                {activeTool === ToolType.LOGIC_FIXER && <ScriptGenTool onUseQuota={useQuota} quota={quota} onQuotaExhausted={() => {}} />}
                 {activeTool === ToolType.INTELLIGENCE_CHAT && (
                   <SecurityChat 
                     key={activeSessionId || 'new'} onSaveHistory={saveToHistory} 
@@ -147,9 +191,9 @@ const App: React.FC = () => {
                     onNewChat={() => setActiveSessionId(null)} onUseQuota={useQuota} quota={quota}
                   />
                 )}
-                {activeTool === ToolType.VISION && <NeuralVision onUseQuota={useQuota} quota={quota} onKeyError={() => {}} />}
-                {activeTool === ToolType.SENTINEL && <SentinelTool onUseQuota={useQuota} quota={quota} onKeyError={() => {}} />}
-                {activeTool === ToolType.BRIDGE && <NeuralBridge onUseQuota={useQuota} quota={quota} onKeyError={() => {}} />}
+                {activeTool === ToolType.VISION && <NeuralVision onUseQuota={useQuota} quota={quota} onKeyError={handleKeySync} />}
+                {activeTool === ToolType.SENTINEL && <SentinelTool onUseQuota={useQuota} quota={quota} onKeyError={handleKeySync} />}
+                {activeTool === ToolType.BRIDGE && <NeuralBridge onUseQuota={useQuota} quota={quota} onKeyError={handleKeySync} />}
             </div>
           </div>
         </div>
