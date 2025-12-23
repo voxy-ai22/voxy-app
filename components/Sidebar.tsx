@@ -1,6 +1,7 @@
+
 import React from 'react';
 import { ToolType, ChatHistoryItem, UserRole } from '../types';
-import { LayoutDashboard, ShieldAlert, Zap, MessageSquare, Trash2, Key, Layout, Image, SearchCode, Replace, RefreshCcw } from 'lucide-react';
+import { LayoutDashboard, ShieldAlert, Zap, MessageSquare, Trash2, Layout, Image, SearchCode, Replace } from 'lucide-react';
 
 interface SidebarProps {
   activeTool: ToolType;
@@ -11,10 +12,9 @@ interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
   userRole: UserRole;
-  onSyncKey?: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ activeTool, setActiveTool, history, onClearHistory, onSelectHistory, isOpen, onClose, userRole, onSyncKey }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activeTool, setActiveTool, history, onClearHistory, onSelectHistory, isOpen, onClose, userRole }) => {
   
   const menuItems = [
     { id: ToolType.DASHBOARD, label: 'Monitor Sistem', icon: LayoutDashboard },
@@ -60,15 +60,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTool, setActiveTool, history, o
               </div>
             </button>
           ))}
-
-          <div className="pt-6 pb-2 px-4 text-[9px] font-black text-slate-300 dark:text-slate-600 uppercase tracking-widest">System Protocols</div>
-          <button 
-            onClick={onSyncKey}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-sky-50 dark:hover:bg-sky-500/10 hover:text-sky-500 transition-all"
-          >
-             <RefreshCcw size={16} />
-             <span className="text-[11px] font-bold tracking-tight">Sync Neural Key</span>
-          </button>
 
           <div className="pt-8 pb-3 px-4 flex justify-between items-center text-[9px] font-black text-slate-300 dark:text-slate-600 uppercase tracking-widest">
             <span>Recent Neural Logs</span>

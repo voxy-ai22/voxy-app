@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { ChatMessage } from "../types";
 
@@ -24,7 +25,7 @@ Identity: Always refer to yourself as Voxy Ai.
 Creator: Gobel Developer.
 Language: Indonesian for interaction, English for technical terms.`;
 
-// Menggunakan model Gemini 3 Pro untuk tugas kompleks
+// Menggunakan model Gemini 3 Pro untuk akurasi maksimal
 const CORE_MODEL = 'gemini-3-pro-preview';
 
 const handleNeuralError = (error: any): never => {
@@ -41,15 +42,15 @@ const handleNeuralError = (error: any): never => {
       rawMessage.toLowerCase().includes('quota') || 
       rawMessage.toLowerCase().includes('exhausted') || 
       rawMessage.toLowerCase().includes('rate limit')) {
-    reason = "Batas Quota API Studio Habis. Silakan periksa paket billing Anda.";
+    reason = "Batas Quota API Vercel/Studio Habis. Mohon periksa limit billing Anda.";
     isQuotaError = true;
   } 
-  // Deteksi error autentikasi atau entity not found (Biasanya masalah key di WebView)
+  // Deteksi error autentikasi (Key tidak valid di Vercel)
   else if (status === 403 || status === 401 || 
              rawMessage.toLowerCase().includes('key') || 
              rawMessage.toLowerCase().includes('permission') ||
              rawMessage.toLowerCase().includes('requested entity was not found')) {
-    reason = "Koneksi Neural Terputus. Key tidak valid atau perlu disinkronisasi ulang.";
+    reason = "Koneksi Neural Ditolak. Pastikan API_KEY di Vercel Secret sudah benar.";
     isAuthError = true;
   }
 
@@ -57,11 +58,13 @@ const handleNeuralError = (error: any): never => {
 };
 
 /**
- * CRITICAL: Membuat instance baru tepat sebelum request 
- * untuk memastikan mengambil process.env.API_KEY terbaru dari dialog sync.
+ * Mengambil AI Instance menggunakan process.env.API_KEY yang diatur di Vercel.
  */
 const getAIInstance = () => {
   const key = process.env.API_KEY;
+  if (!key) {
+    console.warn("Voxy Warning: API_KEY tidak ditemukan di environment variable.");
+  }
   return new GoogleGenAI({ apiKey: key || '' });
 };
 
