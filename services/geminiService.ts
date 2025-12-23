@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { ChatMessage } from "../types";
 
@@ -18,14 +17,14 @@ Your core capabilities:
 2. SMART SEARCH: Use Google Search to find real-time data.
 3. LOGICAL EXPLANATION: Break down complex problems.
 4. SECURITY AUDIT: Every piece of code must be secure.
-5. MULTIMODAL VISION: You can see images and read document contents provided in the message parts. Analyze screenshots for vulnerabilities or explain complex diagrams.
+5. MULTIMODAL VISION: Analyze screenshots or code for vulnerabilities.
 
 Tone: Professional, helpful, concise, and intelligent.
 Identity: Always refer to yourself as Voxy Ai.
 Creator: Gobel Developer.
 Language: Indonesian for interaction, English for technical terms.`;
 
-// Fix: Use gemini-3-pro-preview for complex coding and logic tasks as per guidelines
+// Menggunakan model Gemini 3 Pro untuk tugas kompleks
 const CORE_MODEL = 'gemini-3-pro-preview';
 
 const handleNeuralError = (error: any): never => {
@@ -37,30 +36,33 @@ const handleNeuralError = (error: any): never => {
   let isQuotaError = false;
   let isAuthError = false;
 
-  // Deteksi error kuota
+  // Deteksi error kuota (429)
   if (status === 429 || 
       rawMessage.toLowerCase().includes('quota') || 
       rawMessage.toLowerCase().includes('exhausted') || 
       rawMessage.toLowerCase().includes('rate limit')) {
-    reason = "Batas Quota Gemini API Habis. Silakan tunggu sebentar.";
+    reason = "Batas Quota API Studio Habis. Silakan periksa paket billing Anda.";
     isQuotaError = true;
   } 
-  // Deteksi error autentikasi atau "Requested entity was not found" sesuai instruksi
+  // Deteksi error autentikasi atau entity not found (Biasanya masalah key di WebView)
   else if (status === 403 || status === 401 || 
              rawMessage.toLowerCase().includes('key') || 
              rawMessage.toLowerCase().includes('permission') ||
              rawMessage.toLowerCase().includes('requested entity was not found')) {
-    reason = "Koneksi Neural Terputus. API Key tidak valid atau perlu disinkronisasi ulang.";
+    reason = "Koneksi Neural Terputus. Key tidak valid atau perlu disinkronisasi ulang.";
     isAuthError = true;
   }
 
   throw { status, message: rawMessage, reason, isQuotaError, isAuthError, timestamp: Date.now() } as VoxyApiError;
 };
 
-// Selalu buat instance baru tepat sebelum request untuk memastikan kunci terbaru digunakan
+/**
+ * CRITICAL: Membuat instance baru tepat sebelum request 
+ * untuk memastikan mengambil process.env.API_KEY terbaru dari dialog sync.
+ */
 const getAIInstance = () => {
-  const key = process.env.API_KEY || '';
-  return new GoogleGenAI({ apiKey: key });
+  const key = process.env.API_KEY;
+  return new GoogleGenAI({ apiKey: key || '' });
 };
 
 export const chatWithVoxyStream = async (message: string, history: ChatMessage[], attachments: {data: string, mimeType: string}[]) => {
@@ -72,7 +74,6 @@ export const chatWithVoxyStream = async (message: string, history: ChatMessage[]
     }));
 
     const userParts: any[] = [{ text: message }];
-    
     attachments.forEach(att => {
       userParts.push({
         inlineData: {
@@ -93,6 +94,47 @@ export const chatWithVoxyStream = async (message: string, history: ChatMessage[]
         tools: [{ googleSearch: {} }]
       }
     });
+  } catch (error: any) {
+    return handleNeuralError(error);
+  }
+};
+
+export const analyzeAndFixCode = async (code: string) => {
+  try {
+    const ai = getAIInstance();
+    const response = await ai.models.generateContent({
+      model: CORE_MODEL,
+      contents: `Audit and optimize: \n\n${code}`,
+      config: {
+        systemInstruction: MASTER_PROMPT,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            severity: { type: Type.STRING },
+            summary: { type: Type.STRING },
+            findings: { type: Type.ARRAY, items: { type: Type.STRING } },
+            recommendations: { type: Type.ARRAY, items: { type: Type.STRING } },
+          },
+          required: ["severity", "summary", "findings", "recommendations"]
+        }
+      },
+    });
+    return JSON.parse(response.text || '{}');
+  } catch (error: any) {
+    return handleNeuralError(error);
+  }
+};
+
+export const generateScript = async (prompt: string) => {
+  try {
+    const ai = getAIInstance();
+    const response = await ai.models.generateContent({
+      model: CORE_MODEL,
+      contents: `Generate script for: ${prompt}`,
+      config: { systemInstruction: MASTER_PROMPT },
+    });
+    return response.text;
   } catch (error: any) {
     return handleNeuralError(error);
   }
@@ -148,47 +190,6 @@ export const codeTranspiler = async (code: string, targetLanguage: string) => {
   }
 };
 
-export const analyzeAndFixCode = async (code: string) => {
-  try {
-    const ai = getAIInstance();
-    const response = await ai.models.generateContent({
-      model: CORE_MODEL,
-      contents: `Audit and optimize: \n\n${code}`,
-      config: {
-        systemInstruction: MASTER_PROMPT,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            severity: { type: Type.STRING },
-            summary: { type: Type.STRING },
-            findings: { type: Type.ARRAY, items: { type: Type.STRING } },
-            recommendations: { type: Type.ARRAY, items: { type: Type.STRING } },
-          },
-          required: ["severity", "summary", "findings", "recommendations"]
-        }
-      },
-    });
-    return JSON.parse(response.text || '{}');
-  } catch (error: any) {
-    return handleNeuralError(error);
-  }
-};
-
-export const generateScript = async (prompt: string) => {
-  try {
-    const ai = getAIInstance();
-    const response = await ai.models.generateContent({
-      model: CORE_MODEL,
-      contents: `Generate script for: ${prompt}`,
-      config: { systemInstruction: MASTER_PROMPT },
-    });
-    return response.text;
-  } catch (error: any) {
-    return handleNeuralError(error);
-  }
-};
-
 export const executeIntelligenceModule = async (moduleId: string, input: string) => {
   try {
     const ai = getAIInstance();
@@ -201,4 +202,4 @@ export const executeIntelligenceModule = async (moduleId: string, input: string)
   } catch (error: any) {
     return handleNeuralError(error);
   }
-}
+};

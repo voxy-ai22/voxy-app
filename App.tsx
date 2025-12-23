@@ -12,11 +12,16 @@ import Auth from './components/Auth';
 import CommandPalette from './components/CommandPalette';
 import VoxyBubble from './components/VoxyBubble';
 import { ToolType, ChatHistoryItem, ChatMessage, UserSession, UserRole } from './types';
-import { Power, Menu, Moon, Sun, Search, Activity, Key, RefreshCcw, ShieldCheck } from 'lucide-react';
+import { Power, Menu, Moon, Sun, Search, Activity, RefreshCcw, Key } from 'lucide-react';
 
-// Fix: Removed local AIStudio interface definition as it conflicts with the global definition 
-// and removed readonly modifier to match the existing global declaration on Window.
+// Fix: Define or augment the AIStudio interface and use it for the window object to resolve type collisions
+// with other global declarations and ensure compatibility with identical modifiers.
 declare global {
+  interface AIStudio {
+    hasSelectedApiKey: () => Promise<boolean>;
+    openSelectKey: () => Promise<void>;
+  }
+
   interface Window {
     aistudio: AIStudio;
   }
@@ -35,20 +40,22 @@ const App: React.FC = () => {
   const [quota, setQuota] = useState(MAX_QUOTA);
   const [keyStatus, setKeyStatus] = useState<'valid' | 'missing'>('valid');
 
+  // Sync Logic untuk WebView/APK
+  const checkKeyStatus = async () => {
+    if (window.aistudio) {
+      const hasKey = await window.aistudio.hasSelectedApiKey();
+      setKeyStatus(hasKey ? 'valid' : 'missing');
+    }
+  };
+
   useEffect(() => {
     const savedSession = localStorage.getItem('voxy_session');
     if (savedSession) setSession(JSON.parse(savedSession));
     const savedHistory = localStorage.getItem('voxy_history');
     if (savedHistory) setHistory(JSON.parse(savedHistory));
 
-    const checkKeyStatus = async () => {
-      if (window.aistudio) {
-        const hasKey = await window.aistudio.hasSelectedApiKey();
-        // Persist local check to ensure it stays valid in this session
-        setKeyStatus(hasKey ? 'valid' : 'missing');
-      }
-    };
     checkKeyStatus();
+    const interval = setInterval(checkKeyStatus, 5000); // Berkala cek di WebView
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
@@ -60,13 +67,13 @@ const App: React.FC = () => {
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
+      clearInterval(interval);
     };
   }, []);
 
   const handleKeySync = async () => {
     if (window.aistudio) {
       await window.aistudio.openSelectKey();
-      // Asumsikan sukses sesuai instruksi race condition
       setKeyStatus('valid');
     }
   };
@@ -87,10 +94,6 @@ const App: React.FC = () => {
     const newSession: UserSession = { isAuthenticated: true, username, email, loginTime: Date.now(), role };
     setSession(newSession);
     localStorage.setItem('voxy_session', JSON.stringify(newSession));
-    // Re-verify key on login
-    if (window.aistudio) {
-      window.aistudio.hasSelectedApiKey().then(has => setKeyStatus(has ? 'valid' : 'missing'));
-    }
   };
 
   const handleLogout = () => {
@@ -146,10 +149,10 @@ const App: React.FC = () => {
                   <Activity size={18} className={keyStatus === 'valid' ? 'text-emerald-500 animate-pulse' : 'text-red-500 animate-ping'} />
                   <div className="flex flex-col items-start leading-none">
                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-900 dark:text-white">
-                      {keyStatus === 'valid' ? 'Neural Active' : 'Neural Link Failure'}
+                      {keyStatus === 'valid' ? 'Neural Link Active' : 'Neural Link Failure'}
                     </span>
                     <span className="text-[7px] font-bold opacity-60 uppercase mt-0.5">
-                      {keyStatus === 'valid' ? 'Secure Env Linked' : 'Sync Required'}
+                      {keyStatus === 'valid' ? 'Secured Node' : 'Action Required'}
                     </span>
                   </div>
                </div>
@@ -157,9 +160,9 @@ const App: React.FC = () => {
                {keyStatus === 'missing' && (
                  <button 
                   onClick={handleKeySync}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-red-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest animate-pulse shadow-lg shadow-red-500/20"
+                  className="flex items-center gap-2 px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shadow-lg shadow-red-500/20"
                  >
-                   <RefreshCcw size={14} /> Sync Key
+                   <RefreshCcw size={12} /> Re-Sync
                  </button>
                )}
              </div>
