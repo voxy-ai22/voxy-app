@@ -11,8 +11,6 @@ interface SecurityChatProps {
   onNewChat: () => void;
   onUseQuota: () => boolean;
   quota: number;
-  onQuotaExhausted?: () => void;
-  onKeyError?: () => void;
 }
 
 interface AttachedFile {
@@ -28,9 +26,7 @@ const SecurityChat: React.FC<SecurityChatProps> = ({
   initialMessages, 
   onNewChat, 
   onUseQuota, 
-  quota, 
-  onQuotaExhausted,
-  onKeyError
+  quota
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState('');
@@ -38,7 +34,7 @@ const SecurityChat: React.FC<SecurityChatProps> = ({
   const [loading, setLoading] = useState(false);
   const [isTypingAnimation, setIsTypingAnimation] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
-  const [errorStatus, setErrorStatus] = useState<{msg: string, reason: string, type: 'auth' | 'quota' | 'general'} | null>(null);
+  const [errorStatus, setErrorStatus] = useState<{msg: string, reason: string} | null>(null);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const stopTypingRef = useRef<boolean>(false);
@@ -123,8 +119,7 @@ const SecurityChat: React.FC<SecurityChatProps> = ({
     if (!onUseQuota()) {
       setErrorStatus({ 
         msg: "Energi Sistem Terbatas", 
-        reason: "Quota lokal sedang memulihkan diri.", 
-        type: 'quota' 
+        reason: "Quota harian lokal sedang memulihkan diri."
       });
       return;
     }
@@ -174,7 +169,7 @@ const SecurityChat: React.FC<SecurityChatProps> = ({
       setIsTypingAnimation(false);
       
       const voxyError = err as VoxyApiError;
-      setErrorStatus({ msg: voxyError.message || "Link Failure", reason: voxyError.reason || "Gangguan transmisi.", type: voxyError.isAuthError ? 'auth' : 'general' });
+      setErrorStatus({ msg: voxyError.message || "Link Failure", reason: voxyError.reason || "Gangguan transmisi neural." });
       
       setMessages(prev => {
         const updated = [...prev];
@@ -184,8 +179,6 @@ const SecurityChat: React.FC<SecurityChatProps> = ({
         }
         return [...prev, { role: 'model', text: `[CRITICAL]: ${voxyError.reason}`, timestamp: Date.now() }];
       });
-      if (voxyError.isAuthError) onKeyError?.();
-      if (voxyError.isQuotaError) onQuotaExhausted?.();
     }
   };
 
@@ -201,7 +194,7 @@ const SecurityChat: React.FC<SecurityChatProps> = ({
             <div className="flex items-center gap-2 mt-0.5">
                <div className={`w-1.5 h-1.5 rounded-full ${quota > 0 && !loading ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500 animate-ping'}`}></div>
                <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                 {isThinking ? 'Processing Intelligence...' : 'Neural Link Ready'}
+                 {isThinking ? 'Neural Computing...' : 'System Active'}
                </span>
             </div>
           </div>
@@ -217,26 +210,30 @@ const SecurityChat: React.FC<SecurityChatProps> = ({
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-8 animate-smooth">
             <div className="relative mb-8">
-              <div className="absolute inset-0 bg-sky-500/20 blur-[60px] rounded-full"></div>
-              <div className="w-24 h-24 bg-slate-900 dark:bg-sky-500 rounded-[2.5rem] flex items-center justify-center text-white relative shadow-2xl">
-                 <span className="text-5xl font-black font-mono">V</span>
+              <div className="absolute inset-0 bg-sky-500/20 blur-[60px] rounded-full animate-pulse"></div>
+              <div className="w-32 h-32 bg-slate-900 dark:bg-sky-500 rounded-[3rem] flex items-center justify-center text-white relative shadow-2xl scale-110">
+                 <span className="text-6xl font-black font-mono">V</span>
               </div>
             </div>
-            <h2 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter uppercase mb-4">
-              Selamat datang di Voxy Ai
+            <h2 className="text-5xl font-black text-slate-900 dark:text-white tracking-tighter uppercase mb-4">
+              Selamat datang di Voxy ai
             </h2>
-            <div className="flex flex-col items-center gap-2 max-w-sm">
-              <p className="text-slate-400 text-xs font-bold uppercase tracking-[0.2em] leading-relaxed">
-                Asisten Keamanan & Arsitektur Neural Anda.<br/>
-                Audit kode, kirim foto, atau baca file log dalam satu perintah.
+            <div className="flex flex-col items-center gap-2 max-w-md">
+              <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-[0.3em] leading-relaxed">
+                Asisten Keamanan & Logika Digital Anda.<br/>
+                Sudah siap untuk mengaudit kode atau menganalisis sistem?
               </p>
-              <div className="mt-6 flex gap-3">
-                 <span className="px-4 py-1.5 bg-sky-50 dark:bg-sky-500/10 border border-sky-100 dark:border-sky-500/20 rounded-full text-[9px] font-black text-sky-600 dark:text-sky-400 uppercase tracking-widest flex items-center gap-2">
-                   <Sparkles size={12} /> Intelligent Audit
-                 </span>
-                 <span className="px-4 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-full text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                   Encrypted Channel
-                 </span>
+              <div className="mt-8 grid grid-cols-2 gap-4 w-full">
+                 <div className="p-4 bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 text-left">
+                    <Sparkles className="text-sky-500 mb-2" size={18} />
+                    <p className="text-[10px] font-black text-slate-900 dark:text-white uppercase">Neural Audit</p>
+                    <p className="text-[8px] text-slate-400 font-bold uppercase mt-1">Audit kode instan</p>
+                 </div>
+                 <div className="p-4 bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 text-left">
+                    <BrainCircuit className="text-emerald-500 mb-2" size={18} />
+                    <p className="text-[10px] font-black text-slate-900 dark:text-white uppercase">Vision Scan</p>
+                    <p className="text-[8px] text-slate-400 font-bold uppercase mt-1">Analisis arsitektur</p>
+                 </div>
               </div>
             </div>
           </div>
@@ -304,7 +301,7 @@ const SecurityChat: React.FC<SecurityChatProps> = ({
 
         {(isTypingAnimation || loading || isThinking) && (
           <button onClick={stopGeneration} className="absolute -top-12 left-1/2 -translate-x-1/2 bg-red-500 text-white px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest shadow-xl border-2 border-white dark:border-navy-950 z-20">
-             STOP NEURAL STREAM
+             TERMINATE STREAM
           </button>
         )}
 
@@ -315,7 +312,7 @@ const SecurityChat: React.FC<SecurityChatProps> = ({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             disabled={quota <= 0 || loading || isThinking}
-            placeholder="Tulis pesan atau kirim file untuk di-audit..."
+            placeholder="Ketik instruksi keamanan Kak..."
             className="w-full bg-transparent px-4 py-3 text-sm font-bold outline-none text-slate-800 dark:text-white placeholder:text-slate-300 resize-none max-h-[250px] custom-scrollbar"
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
           />
